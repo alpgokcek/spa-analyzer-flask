@@ -1,21 +1,17 @@
 from flask import Flask, request, redirect, jsonify
 import os
-import urllib.request
 from werkzeug.utils import secure_filename
 from helpers import analyze_spa
-import celery
-
-worker = celery.Celery('spa-analyzer-flask')
-worker.conf.update(BROKER_URL=os.environ['REDIS_URL'],
-                   CELERY_RESULT_BACKEND=os.environ['REDIS_URL'])
+import time
+import threading
 
 UPLOAD_FOLDER = os.path.abspath(os.getcwd()) + '/uploads'
-print(UPLOAD_FOLDER)
 
 app = Flask(__name__)
 app.secret_key = "secret key"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
+latest_file_path = ''
 
 
 @app.route('/')
@@ -35,9 +31,11 @@ def allowed_file(filename):
     return False
 
 
-@worker.task
-def deneme(file_path):
-    return analyze_spa(file_path)
+def setup_analyze_spa(file_path):
+    start = time.time()
+    analyze_spa(file_path)
+    end = time.time()
+    print('analyze_spa', str(end - start))
 
 
 @app.route('/file-upload', methods=['POST'])
@@ -52,12 +50,16 @@ def upload_file():
         resp.status_code = 400
         return resp
     if file and allowed_file(file.filename):
+        start = time.time()
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
         resp = jsonify({'message': 'File successfully uploaded'})
-        analyze_spa(file_path)
+        thread = threading.Thread(target=setup_analyze_spa, kwargs={'file_path': file_path})
+        thread.start()
         resp.status_code = 201
+        end = time.time()
+        print('file-upload', str(end - start))
         return resp
     else:
         resp = jsonify({'message': 'Allowed file types are pdf, xls, xlsx, xlsm'})
