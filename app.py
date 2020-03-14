@@ -31,13 +31,6 @@ def allowed_file(filename):
     return False
 
 
-def setup_analyze_spa(file_path):
-    start = time.time()
-    analyze_spa(file_path)
-    end = time.time()
-    print('analyze_spa', str(end - start))
-
-
 @app.route('/file-upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -55,7 +48,7 @@ def upload_file():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
         resp = jsonify({'message': 'File successfully uploaded'})
-        thread = threading.Thread(target=setup_analyze_spa, kwargs={'file_path': file_path})
+        thread = threading.Thread(target=analyze_spa, kwargs={'file_path': file_path})
         thread.start()
         resp.status_code = 201
         end = time.time()
