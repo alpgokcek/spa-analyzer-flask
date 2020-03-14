@@ -158,7 +158,7 @@ def analyze_spa(file_path):
             j += 1
     conn.close()
     engine.dispose()
-
+    return True
 
 def program_sheet(file_path):
     global program_outcomes
