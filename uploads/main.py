@@ -1,6 +1,5 @@
 import os
 import urllib.request
-from app import app
 from flask import Flask, request, redirect, jsonify
 from werkzeug.utils import secure_filename
 from helpers import analyze_spa
