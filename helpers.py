@@ -107,14 +107,12 @@ def course_outcome_provides_program_outcome():
         now = datetime.datetime.utcnow()
         splitted_program_outcomes = [x.strip() for x in course_outcomes['Program Outcomes'][i].split(',')]
         for j in splitted_program_outcomes:
-            course_outcome_provides_program_outcome_dataframe.append(pd.DataFrame(
-                {'course_outcome_id': course_outcomes_id[i], 'program_outcome_id': program_outcomes_id[j],
-                 'created_at': now, 'updated_at': now},
-                index=[0]))
+            course_outcome_provides_program_outcome_dataframe = course_outcome_provides_program_outcome_dataframe.append(
+                pd.DataFrame({'course_outcome_id': course_outcomes_id[i], 'program_outcome_id': program_outcomes_id[j],
+                              'created_at': now, 'updated_at': now}, index=[0]))
     course_outcome_provides_program_outcome_dataframe.to_sql('program_outcomes_provides_course_outcomes', con=conn,
                                                              if_exists='append', chunksize=1000, index=False)
     conn.close()
-    print('+ Done: program outcomes provides course outcomes')
 
     ###################################################################################################
     ################################## GRADING TOOL and ASSESSMENTS ###################################
@@ -166,7 +164,7 @@ def grading_tool_covers_course_outcome():
             splitted_course_outcomes = [x.strip() for x in
                                         exams[exam]['Questions'][question]['Related Outcomes'].split(',')]
             for co in splitted_course_outcomes:
-                course_outcome_dataframe.append(pd.DataFrame(
+                course_outcome_dataframe = course_outcome_dataframe.append(pd.DataFrame(
                     {'grading_tool_id': grading_tool_id[exam][i], 'course_outcome_id': course_outcomes_id[co],
                      'created_at': now, 'updated_at': now}, index=[0]))
     course_outcome_dataframe.to_sql('grading_tool_covers_course_outcome', con=conn, if_exists='append', chunksize=1000,
@@ -188,7 +186,7 @@ def student_answers_grading_tool():
         for gt_id in grading_tool_id[exam]:
             for i in range(len(student_list)):
                 now = datetime.datetime.utcnow()
-                sagt.append(pd.DataFrame(
+                sagt = sagt.append(pd.DataFrame(
                     {'student_id': student_list[i], 'grading_tool_id': gt_id, 'grade': grading_tool_grades[j][i],
                      'created_at': now,
                      'updated_at': now},
