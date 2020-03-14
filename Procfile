@@ -1,1 +1,1 @@
-web: gunicorn app:spa_analyzer_flask
+web: gunicorn app:app
