@@ -45,7 +45,7 @@ def analyze_spa(file_path):
     course_sheet(file_path)
     grades_sheet(file_path)
 
-    print("Course")
+    print("- Started:  Course")
     conn = engine.connect()
     metadata = sqlalchemy.MetaData()
     course_table = sqlalchemy.Table('course', metadata, autoload=True, autoload_with=engine)
@@ -54,7 +54,7 @@ def analyze_spa(file_path):
                         course_table.columns.year_and_term == '2019-2020-01', course_table.columns.title == course_name,
                         course_table.columns.credit == course_credit))
     course_id = get_result_proxy(conn.execute(course_query))
-
+    print("+ Done: Course done")
     thread1 = threading.Thread(target=program_outcomes_course_outcomes)
     thread1.start()
 
@@ -72,7 +72,7 @@ def analyze_spa(file_path):
 
 def program_outcomes_course_outcomes():
     conn = engine.connect()
-    start = time.time()
+    print('- Started: program outcomes course outcomes')
     for i in program_outcomes.keys():
         now = datetime.datetime.utcnow()
         program_outcome = pd.DataFrame(
@@ -91,6 +91,7 @@ def program_outcomes_course_outcomes():
         last_id = conn.execute("SELECT LAST_INSERT_ID();")
         course_outcomes_id[i] = get_result_proxy(last_id)
     conn.close()
+    print('+ Done: program outcomes course outcomes')
     thread1 = threading.Thread(target=course_outcome_provides_program_outcome)
     thread1.start()
 
@@ -101,7 +102,7 @@ def program_outcomes_course_outcomes():
 def course_outcome_provides_program_outcome():
     conn = engine.connect()
     course_outcome_provides_program_outcome_dataframe = pd.DataFrame()
-    print("program outcomes provides course outcomes")
+    print("- Started: program outcomes provides course outcomes")
     for i in course_outcomes['Program Outcomes'].keys():
         now = datetime.datetime.utcnow()
         splitted_program_outcomes = [x.strip() for x in course_outcomes['Program Outcomes'][i].split(',')]
@@ -113,6 +114,8 @@ def course_outcome_provides_program_outcome():
     course_outcome_provides_program_outcome_dataframe.to_sql('program_outcomes_provides_course_outcomes', con=conn,
                                                              if_exists='append', chunksize=1000, index=False)
     conn.close()
+    print('+ Done: program outcomes provides course outcomes')
+
 
     ###################################################################################################
     ################################## GRADING TOOL and ASSESSMENTS ###################################
@@ -121,7 +124,7 @@ def course_outcome_provides_program_outcome():
 
 def grading_tool_and_assessments():
     conn = engine.connect()
-    print("grading tool and assessments")
+    print("- Started: grading tool and assessments")
     for exam in exams.keys():
         now = datetime.datetime.utcnow()
         exam_percentage = exams[exam]['Exam Percentage']
@@ -142,6 +145,8 @@ def grading_tool_and_assessments():
             last_id = conn.execute("SELECT LAST_INSERT_ID();")
             grading_tool_id[exam].append(get_result_proxy(last_id))
     conn.close()
+    print('+ Done: grading tool and assessments')
+
     thread1 = threading.Thread(target=grading_tool_covers_course_outcome)
     thread1.start()
     thread2 = threading.Thread(target=student_answers_grading_tool)
@@ -154,7 +159,7 @@ def grading_tool_and_assessments():
 def grading_tool_covers_course_outcome():
     conn = engine.connect()
     course_outcome_dataframe = pd.DataFrame()
-    print("grading tool covers course outcome")
+    print("- Started: grading tool covers course outcome")
     for exam in exams.keys():
         now = datetime.datetime.utcnow()
         for i in range(len(exams[exam]['Questions'].keys())):
@@ -167,6 +172,7 @@ def grading_tool_covers_course_outcome():
                      'created_at': now, 'updated_at': now}, index=[0]))
     course_outcome_dataframe.to_sql('grading_tool_covers_course_outcome', con=conn, if_exists='append', index=False)
     conn.close()
+    print('+ Done: grading tool covers course outcome')
 
 
 ###################################################################################################
@@ -176,7 +182,7 @@ def grading_tool_covers_course_outcome():
 def student_answers_grading_tool():
     conn = engine.connect()
     sagt = pd.DataFrame()
-    print("student answers grading tool")
+    print("- Started: student answers grading tool")
     j = 0
     for exam in exams.keys():
         for gt_id in grading_tool_id[exam]:
@@ -190,6 +196,7 @@ def student_answers_grading_tool():
             j += 1
     sagt.to_sql('student_answers_grading_tool', con=conn, if_exists='append', index=False)
     conn.close()
+    print('+ Done: student answers grading tool')
 
 
 def program_sheet(file_path):
@@ -218,7 +225,7 @@ def grades_sheet(file_path):
         # student id's
         temp_student_list = data.iloc[0:, 0].ravel().tolist()
         conn = engine.connect()
-        print("checking student list")
+        print("- Started: checking student list")
         metadata = sqlalchemy.MetaData()
         students_takes_sections_table = sqlalchemy.Table('students_takes_sections', metadata, autoload=True,
                                                          autoload_with=engine)
@@ -230,6 +237,7 @@ def grades_sheet(file_path):
             if students_takes_sections:
                 student_list.append(i)
         conn.close()
+        print('+ Done: checking student list')
 
     thread1 = threading.Thread(target=students)
     thread1.start()
