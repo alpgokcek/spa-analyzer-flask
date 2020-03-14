@@ -181,17 +181,15 @@ def student_answers_grading_tool():
     conn = engine.connect()
     sagt = pd.DataFrame()
     print("- Started: student answers grading tool")
-    j = 0
     for exam in exams.keys():
-        for gt_id in grading_tool_id[exam]:
-            for i in range(len(student_list)):
+        for i in range(len(grading_tool_id[exam])):
+            for j in range(len(student_list)):
                 now = datetime.datetime.utcnow()
                 sagt = sagt.append(pd.DataFrame(
-                    {'student_id': student_list[i], 'grading_tool_id': gt_id, 'grade': grading_tool_grades[j][i],
+                    {'student_id': student_list[j], 'grading_tool_id': grading_tool_id[exam][i], 'grade': grading_tool_grades[i][j],
                      'created_at': now,
                      'updated_at': now},
                     index=[0]))
-            j += 1
     sagt.to_sql('student_answers_grading_tool', con=conn, if_exists='append', chunksize=1000, index=False)
     conn.close()
     print('+ Done: student answers grading tool')
