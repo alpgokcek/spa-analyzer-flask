@@ -6,10 +6,10 @@ from helpers import analyze_spa
 import celery
 
 worker = celery.Celery('spa-analyzer-flask')
-app.conf.update(BROKER_URL=os.environ['REDIS_URL'],
-                CELERY_RESULT_BACKEND=os.environ['REDIS_URL'])
+worker.conf.update(BROKER_URL=os.environ['REDIS_URL'],
+                   CELERY_RESULT_BACKEND=os.environ['REDIS_URL'])
 
-UPLOAD_FOLDER = os.path.abspath(os.getcwd())+'/uploads'
+UPLOAD_FOLDER = os.path.abspath(os.getcwd()) + '/uploads'
 print(UPLOAD_FOLDER)
 
 app = Flask(__name__)
@@ -34,9 +34,11 @@ def allowed_file(filename):
                 return True
     return False
 
+
 @worker.task
 def deneme(file_path):
     return analyze_spa(file_path)
+
 
 @app.route('/file-upload', methods=['POST'])
 def upload_file():
