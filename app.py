@@ -11,7 +11,7 @@ spa_analyzer_flask.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
 @spa_analyzer_flask.route('/')
 def hello_world():
-    return 'Hello World!'
+    return 'SPA Analyzer Flask'
 
 
 if __name__ == '__main__':
