@@ -116,7 +116,6 @@ def course_outcome_provides_program_outcome():
     conn.close()
     print('+ Done: program outcomes provides course outcomes')
 
-
     ###################################################################################################
     ################################## GRADING TOOL and ASSESSMENTS ###################################
     ###################################################################################################
@@ -170,7 +169,8 @@ def grading_tool_covers_course_outcome():
                 course_outcome_dataframe.append(pd.DataFrame(
                     {'grading_tool_id': grading_tool_id[exam][i], 'course_outcome_id': course_outcomes_id[co],
                      'created_at': now, 'updated_at': now}, index=[0]))
-    course_outcome_dataframe.to_sql('grading_tool_covers_course_outcome', con=conn, if_exists='append', index=False)
+    course_outcome_dataframe.to_sql('grading_tool_covers_course_outcome', con=conn, if_exists='append', chunksize=1000,
+                                    index=False)
     conn.close()
     print('+ Done: grading tool covers course outcome')
 
@@ -194,7 +194,7 @@ def student_answers_grading_tool():
                      'updated_at': now},
                     index=[0]))
             j += 1
-    sagt.to_sql('student_answers_grading_tool', con=conn, if_exists='append', index=False)
+    sagt.to_sql('student_answers_grading_tool', con=conn, if_exists='append', chunksize=1000, index=False)
     conn.close()
     print('+ Done: student answers grading tool')
 
