@@ -43,15 +43,19 @@ def upload_file():
         resp.status_code = 400
         return resp
     if file and allowed_file(file.filename):
-        start = time.time()
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
         resp = jsonify({'message': 'File successfully uploaded'})
-        thread = threading.Thread(target=analyze_spa, kwargs={'file_path': file_path})
-        thread.start()
-        thread.join()
         resp.status_code = 201
+        try:
+            thread = threading.Thread(target=analyze_spa, kwargs={'file_path': file_path})
+            thread.start()
+            thread.join()
+        except Exception as e:
+            resp = jsonify({'error': 'An error occurred.', 'message': e})
+            resp.status_code = 201
+
         return resp
     else:
         resp = jsonify({'message': 'Allowed file types are pdf, xls, xlsx, xlsm'})
