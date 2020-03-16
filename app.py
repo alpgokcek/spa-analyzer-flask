@@ -54,7 +54,7 @@ def upload_file():
             thread.join()
         except Exception as e:
             resp = jsonify({'error': 'An error occurred.', 'message': e})
-            resp.status_code = 201
+            resp.status_code = 500
 
         return resp
     else:
