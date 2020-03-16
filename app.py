@@ -50,9 +50,8 @@ def upload_file():
         resp = jsonify({'message': 'File successfully uploaded'})
         thread = threading.Thread(target=analyze_spa, kwargs={'file_path': file_path})
         thread.start()
+        thread.join()
         resp.status_code = 201
-        end = time.time()
-        print('file-upload', str(end - start))
         return resp
     else:
         resp = jsonify({'message': 'Allowed file types are pdf, xls, xlsx, xlsm'})

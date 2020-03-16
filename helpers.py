@@ -1,13 +1,11 @@
 import pandas as pd
 from collections import defaultdict
-import json
 import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 import datetime
 from dotenv import load_dotenv
 from os import environ
-import time
 import threading
 
 load_dotenv()
@@ -57,10 +55,10 @@ def analyze_spa(file_path):
     print("+ Done: Course done")
     thread1 = threading.Thread(target=program_outcomes_course_outcomes)
     thread1.start()
-
+    thread1.join()
     thread2 = threading.Thread(target=grading_tool_and_assessments)
     thread2.start()
-
+    thread2.join()
     conn.close()
     engine.dispose()
     return True
@@ -113,7 +111,7 @@ def course_outcome_provides_program_outcome():
     course_outcome_provides_program_outcome_dataframe.to_sql('program_outcomes_provides_course_outcomes', con=conn,
                                                              if_exists='append', chunksize=1000, index=False)
     conn.close()
-
+    print('+ Done: program outcomes provides course outcomes')
     ###################################################################################################
     ################################## GRADING TOOL and ASSESSMENTS ###################################
     ###################################################################################################
@@ -148,6 +146,7 @@ def grading_tool_and_assessments():
     thread1.start()
     thread2 = threading.Thread(target=student_answers_grading_tool)
     thread2.start()
+
 
 
 ###################################################################################################
@@ -186,7 +185,8 @@ def student_answers_grading_tool():
             for j in range(len(student_list)):
                 now = datetime.datetime.utcnow()
                 sagt = sagt.append(pd.DataFrame(
-                    {'student_id': student_list[j], 'grading_tool_id': grading_tool_id[exam][i], 'grade': grading_tool_grades[i][j],
+                    {'student_id': student_list[j], 'grading_tool_id': grading_tool_id[exam][i],
+                     'grade': grading_tool_grades[i][j],
                      'created_at': now,
                      'updated_at': now},
                     index=[0]))
