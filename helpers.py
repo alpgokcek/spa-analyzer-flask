@@ -18,6 +18,20 @@ def get_result_proxy(resultproxy):
             return value
 
 
+def get_result_proxy_list(resultproxy, query='id'):
+    if query == 'id':
+        output = []
+        for rowproxy in resultproxy:
+            # rowproxy.items() returns an array like [(key0, value0), (key1, value1)]
+            output.append(rowproxy[query])
+    else:
+        output = dict()
+        for rowproxy in resultproxy:
+            # rowproxy.items() returns an array like [(key0, value0), (key1, value1)]
+            output[rowproxy[query]] = rowproxy['id']
+    return output
+
+
 def nested_defaultdict():
     return defaultdict(nested_defaultdict)
 
@@ -37,8 +51,113 @@ connect_string = 'mysql+pymysql://{}:{}@{}:{}/{}?charset=utf8mb4'.format(DB_USER
 engine = create_engine(connect_string, poolclass=NullPool)
 
 
+def clear_global_variables():
+    global program_outcomes, course_outcomes, student_list, exams, grading_tool_grades, course_code, course_name, \
+        course_credit, program_outcomes_id, course_outcomes_id, course_id, student_id, exam_id, grading_tool_id
+
+    program_outcomes, course_outcomes, student_list, exams, grading_tool_grades = dict(), dict(), list(), defaultdict(
+        nested_defaultdict), list()
+    course_code, course_name, course_credit = '', '', '',
+    program_outcomes_id, course_outcomes_id, course_id, student_id, exam_id, grading_tool_id = dict(), dict(), 0, dict(), dict(), defaultdict(
+        list)
+
+
+def delete_spa(department, code, year_and_term, name, credit):
+    conn = engine.connect()
+    assessments_to_delete, grading_tools_to_delete, course_outcomes_to_delete = [], [], []
+    metadata = sqlalchemy.MetaData()
+    grading_tool_table = sqlalchemy.Table('grading_tool', metadata, autoload=True, autoload_with=engine)
+    assessment_table = sqlalchemy.Table('assessment', metadata, autoload=True, autoload_with=engine)
+    course_outcome_table = sqlalchemy.Table('course_outcome', metadata, autoload=True, autoload_with=engine)
+    po_provides_co_table = sqlalchemy.Table('program_outcomes_provides_course_outcomes', metadata, autoload=True,
+                                            autoload_with=engine)
+    student_answers_gt_table = sqlalchemy.Table('student_answers_grading_tool', metadata, autoload=True,
+                                                autoload_with=engine)
+    gt_covers_co_table = sqlalchemy.Table('grading_tool_covers_course_outcome', metadata, autoload=True,
+                                          autoload_with=engine)
+
+    def po_provides_co():
+        print("- Started: Deleting program_outcomes_provides_course_outcomes")
+        inner_conn = engine.connect()
+        for i in course_outcomes_to_delete:
+            delete_query = po_provides_co_table.delete().where(po_provides_co_table.c.course_outcome_id == i)
+            inner_conn.execute(delete_query)
+        inner_conn.close()
+        print("+ Done: Deleting program_outcomes_provides_course_outcomes")
+
+    def student_answers_grading_tool_delete():
+        print("- Started: Deleting student_answers_grading_tool")
+        inner_conn = engine.connect()
+        for i in grading_tools_to_delete:
+            delete_query = student_answers_gt_table.delete().where(student_answers_gt_table.c.grading_tool_id == i)
+            inner_conn.execute(delete_query)
+        inner_conn.close()
+        print("+ Done: Deleting student_answers_grading_tool")
+
+    def gt_covers_co():
+        print("- Started: Deleting grading_tool_covers_course_outcome")
+        inner_conn = engine.connect()
+        for i in course_outcomes_to_delete:
+            delete_query = gt_covers_co_table.delete().where(gt_covers_co_table.c.course_outcome_id == i)
+            inner_conn.execute(delete_query)
+        inner_conn.close()
+        print("+ Done: Deleting grading_tool_covers_course_outcome")
+
+    def delete_rest():
+        print("- Started: Deleting rest")
+        inner_conn = engine.connect()
+        for i in assessments_to_delete:
+            delete_query = grading_tool_table.delete().where(grading_tool_table.c.assessment_id == i)
+            inner_conn.execute(delete_query)
+            delete_query = assessment_table.delete().where(assessment_table.c.id == i)
+            inner_conn.execute(delete_query)
+        for i in course_outcomes_to_delete:
+            delete_query = course_outcome_table.delete().where(course_outcome_table.c.id == i)
+            inner_conn.execute(delete_query)
+        inner_conn.close()
+        print("+ Done: Deleting rest")
+
+    course_table = sqlalchemy.Table('course', metadata, autoload=True, autoload_with=engine)
+    course_query = sqlalchemy.select([course_table]).where(
+        sqlalchemy.and_(course_table.columns.department == department, course_table.columns.code == code,
+                        course_table.columns.year_and_term == year_and_term, course_table.columns.title == name,
+                        course_table.columns.credit == credit))
+    course_id = get_result_proxy(conn.execute(course_query))
+    print("- Started: Assessment ID fetch")
+    # Assessments
+    assessment_select_query = sqlalchemy.select([assessment_table]).where(
+        assessment_table.columns.course_id == course_id)
+    assessments_to_delete = get_result_proxy_list(conn.execute(assessment_select_query))
+    print("+ Done: Assessment ID fetch")
+
+    # Grading Tool
+    print("- Started: Grading Tool ID fetch")
+    for assessment_id in assessments_to_delete:
+        grading_tool_delete_query = sqlalchemy.select([grading_tool_table]).where(
+            grading_tool_table.columns.assessment_id == assessment_id)
+        grading_tools_to_delete += get_result_proxy_list(conn.execute(grading_tool_delete_query))
+    print("+ Done: Grading Tool ID's fetch")
+
+    # Course Outcome
+    print("- Started: Course Outcome ID fetch")
+    course_outcome_select_query = sqlalchemy.select([course_outcome_table]).where(
+        course_outcome_table.columns.course_id == course_id)
+    course_outcomes_to_delete = get_result_proxy_list(conn.execute(course_outcome_select_query))
+    print("+ Done: Course Outcome ID fetch")
+
+    threads = [threading.Thread(target=po_provides_co), threading.Thread(target=student_answers_grading_tool_delete),
+               threading.Thread(target=gt_covers_co)]
+    for thread in threads: thread.start()
+    for thread in threads: thread.join()
+    delete_rest()
+    conn.close()
+    engine.dispose()
+    return True
+
+
 def analyze_spa(file_path):
     global course_id
+    clear_global_variables()
     program_sheet(file_path)
     course_sheet(file_path)
     grades_sheet(file_path)
@@ -52,7 +171,7 @@ def analyze_spa(file_path):
                         course_table.columns.year_and_term == '2019-2020-01', course_table.columns.title == course_name,
                         course_table.columns.credit == course_credit))
     course_id = get_result_proxy(conn.execute(course_query))
-    print("+ Done: Course done")
+    print("+ Done: Course")
     thread1 = threading.Thread(target=program_outcomes_course_outcomes)
     thread1.start()
     thread1.join()
@@ -63,22 +182,31 @@ def analyze_spa(file_path):
     engine.dispose()
     return True
 
-    ###################################################################################################
-    ############################### COURSE OUTCOMES - PROGRAM OUTCOMES ################################
-    ###################################################################################################
 
-
+###################################################################################################
+############################### COURSE OUTCOMES - PROGRAM OUTCOMES ################################
+###################################################################################################
 def program_outcomes_course_outcomes():
+    global program_outcomes_id
     conn = engine.connect()
+    metadata = sqlalchemy.MetaData()
+    program_outcome_table = sqlalchemy.Table('program_outcome', metadata, autoload=True, autoload_with=engine)
+    program_outcome_select_query = sqlalchemy.select([program_outcome_table]).where(
+        program_outcome_table.columns.year_and_term == '2019-2020-01')
+    program_outcomes_id = get_result_proxy_list(conn.execute(program_outcome_select_query), 'code')
+
     print('- Started: program outcomes course outcomes')
     for i in program_outcomes.keys():
-        now = datetime.datetime.utcnow()
-        program_outcome = pd.DataFrame(
-            {'department_id': 1, 'explanation': program_outcomes[i], 'code': i, 'created_at': now, 'updated_at': now},
-            index=[0])
-        program_outcome.to_sql('program_outcome', con=conn, if_exists='append', chunksize=1000, index=False)
-        last_id = conn.execute("SELECT LAST_INSERT_ID();")
-        program_outcomes_id[i] = get_result_proxy(last_id)
+        if i not in program_outcomes_id:
+            now = datetime.datetime.utcnow()
+            program_outcome = pd.DataFrame(
+                {'department_id': 1, 'explanation': program_outcomes[i], 'code': i, 'created_at': now,
+                 'updated_at': now, 'year_and_term': '2019-2020-01'},
+                index=[0])
+            program_outcome.to_sql('program_outcome', con=conn, if_exists='append', chunksize=1000, index=False)
+            last_id = conn.execute("SELECT LAST_INSERT_ID();")
+            program_outcomes_id[i] = get_result_proxy(last_id)
+
     for i in course_outcomes['Course Outcome Explanation'].keys():
         now = datetime.datetime.utcnow()
         course_outcome = pd.DataFrame(
@@ -112,10 +240,11 @@ def course_outcome_provides_program_outcome():
                                                              if_exists='append', chunksize=1000, index=False)
     conn.close()
     print('+ Done: program outcomes provides course outcomes')
-    ###################################################################################################
-    ################################## GRADING TOOL and ASSESSMENTS ###################################
-    ###################################################################################################
 
+
+###################################################################################################
+################################## GRADING TOOL and ASSESSMENTS ###################################
+###################################################################################################
 
 def grading_tool_and_assessments():
     conn = engine.connect()
@@ -146,7 +275,6 @@ def grading_tool_and_assessments():
     thread1.start()
     thread2 = threading.Thread(target=student_answers_grading_tool)
     thread2.start()
-
 
 
 ###################################################################################################
