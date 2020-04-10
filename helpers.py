@@ -57,12 +57,12 @@ def clear_global_variables():
 
     program_outcomes, course_outcomes, student_list, exams, grading_tool_grades = dict(), dict(), list(), defaultdict(
         nested_defaultdict), list()
-    course_code, course_name, course_credit = '', '', '',
+    course_code, course_name, course_credit = 'IE201', 'Industrial Engineering Test', 6
     program_outcomes_id, course_outcomes_id, course_id, student_id, exam_id, grading_tool_id = dict(), dict(), 0, dict(), dict(), defaultdict(
         list)
 
 
-def delete_spa(department, code, year_and_term, name, credit):
+def delete_excel(department, code, year_and_term, name, credit):
     conn = engine.connect()
     assessments_to_delete, grading_tools_to_delete, course_outcomes_to_delete = [], [], []
     metadata = sqlalchemy.MetaData()
@@ -119,7 +119,7 @@ def delete_spa(department, code, year_and_term, name, credit):
 
     course_table = sqlalchemy.Table('course', metadata, autoload=True, autoload_with=engine)
     course_query = sqlalchemy.select([course_table]).where(
-        sqlalchemy.and_(course_table.columns.department == department, course_table.columns.code == code,
+        sqlalchemy.and_(course_table.columns.department_id == department, course_table.columns.code == code,
                         course_table.columns.year_and_term == year_and_term, course_table.columns.title == name,
                         course_table.columns.credit == credit))
     course_id = get_result_proxy(conn.execute(course_query))
@@ -155,26 +155,30 @@ def delete_spa(department, code, year_and_term, name, credit):
     return True
 
 
-def analyze_spa(file_path):
-    global course_id
+def analyze_spa(file_path, department, code, year_and_term, name, credit):
     clear_global_variables()
-    program_sheet(file_path)
-    course_sheet(file_path)
-    grades_sheet(file_path)
+    spa_program_sheet(file_path)
+    spa_course_sheet(file_path)
+    spa_grades_sheet(file_path)
+    start_threads(department, code, year_and_term, name, credit)
 
+def start_threads(department, code, year_and_term, name, credit):
+    global course_id
     print("- Started:  Course")
     conn = engine.connect()
     metadata = sqlalchemy.MetaData()
     course_table = sqlalchemy.Table('course', metadata, autoload=True, autoload_with=engine)
     course_query = sqlalchemy.select([course_table]).where(
-        sqlalchemy.and_(course_table.columns.department == 1, course_table.columns.code == course_code,
-                        course_table.columns.year_and_term == '2019-2020-01', course_table.columns.title == course_name,
-                        course_table.columns.credit == course_credit))
+        sqlalchemy.and_(course_table.columns.department_id == department, course_table.columns.code == code,
+                        course_table.columns.year_and_term == year_and_term, course_table.columns.title == name,
+                        course_table.columns.credit == credit))
     course_id = get_result_proxy(conn.execute(course_query))
     print("+ Done: Course")
+
     thread1 = threading.Thread(target=program_outcomes_course_outcomes)
     thread1.start()
     thread1.join()
+
     thread2 = threading.Thread(target=grading_tool_and_assessments)
     thread2.start()
     thread2.join()
@@ -217,6 +221,7 @@ def program_outcomes_course_outcomes():
         last_id = conn.execute("SELECT LAST_INSERT_ID();")
         course_outcomes_id[i] = get_result_proxy(last_id)
     conn.close()
+
     print('+ Done: program outcomes course outcomes')
     thread1 = threading.Thread(target=course_outcome_provides_program_outcome)
     thread1.start()
@@ -240,6 +245,7 @@ def course_outcome_provides_program_outcome():
                                                              if_exists='append', chunksize=1000, index=False)
     conn.close()
     print('+ Done: program outcomes provides course outcomes')
+
 
 
 ###################################################################################################
@@ -323,14 +329,14 @@ def student_answers_grading_tool():
     print('+ Done: student answers grading tool')
 
 
-def program_sheet(file_path):
+def spa_program_sheet(file_path):
     global program_outcomes
     data = pd.read_excel(file_path, sheet_name=0, skiprows=1)
     df = pd.DataFrame(data, columns=['Program Outcomes', 'Program Outcome Explanation'])
     program_outcomes = df.set_index('Program Outcomes')['Program Outcome Explanation'].to_dict()
 
 
-def course_sheet(file_path):
+def spa_course_sheet(file_path):
     global course_outcomes, course_code, course_name, course_credit
     data = pd.read_excel(file_path, sheet_name=1, skiprows=5, index_col='Course Outcomes')
     df = pd.DataFrame(data, columns=['Course Outcome Explanation', 'Program Outcomes'])
@@ -339,8 +345,7 @@ def course_sheet(file_path):
     df = pd.DataFrame(data)
     course_code, course_name, course_credit = df.iat[0, 1], df.iat[1, 1], df.iat[2, 1]
 
-
-def grades_sheet(file_path):
+def spa_grades_sheet(file_path):
     global course_outcomes, course_code, course_name, course_credit, exams, student_list
     data = pd.read_excel(file_path, sheet_name=2, skiprows=9, header=None)
     df = pd.DataFrame(data)
@@ -394,3 +399,92 @@ def grades_sheet(file_path):
             exams[current_exam]['Exam Percentage'] = col[1]
         exams[current_exam]['Questions'][col[2]] = {'Question Percentage': col[3], 'Related Outcomes': col[4],
                                                     'Count Question?': col[5]}
+
+
+def gat_analyzer(file_path, department, code, year_and_term, name, credit):
+    clear_global_variables()
+    gat_conversion_sheet(file_path)
+    gat_po_sheet(file_path)
+    gat_student_info_sheet(file_path)
+    gat_co_sheet(file_path)
+    gat_evaluation_co_sheet(file_path)
+    gat_grade_center_sheet(file_path)
+    start_threads(department, code, year_and_term, name, credit)
+
+
+def gat_conversion_sheet(file_path):
+    global conversion_dict
+    data = pd.read_excel(file_path, sheet_name=0, skiprows=1)
+    df = pd.DataFrame(data, columns=['100-Value', '5-Value'])
+    conversion_dict = df.set_index('100-Value')['5-Value'].to_dict()
+
+
+def gat_po_sheet(file_path):
+    global program_outcomes
+    data = pd.read_excel(file_path, sheet_name=1, skiprows=1)
+    df = pd.DataFrame(data, columns=['Program Outcomes', 'Program Outcome Explanation'])
+    program_outcomes = df.set_index('Program Outcomes')['Program Outcome Explanation'].to_dict()
+
+
+def gat_student_info_sheet(file_path):
+    global student_list
+    data = pd.read_excel(file_path, sheet_name=2, skiprows=1)
+    df = pd.DataFrame(data, columns=['Student ID', 'Student Name'])
+    temp = list(df.set_index('Student ID')['Student Name'].to_dict().keys())
+    for s in range(len(temp)):
+        try:
+            student_list.append(str(int(temp[s])))
+        except:
+            pass
+
+
+def gat_co_sheet(file_path):
+    global course_outcomes
+    data = pd.read_excel(file_path, sheet_name=3, skiprows=1, index_col='Course Outcomes')
+    df = pd.DataFrame(data, columns=['Course Outcome Explanation', 'Program Outcomes'])
+    course_outcomes = df.to_dict()
+
+
+def gat_evaluation_co_sheet(file_path):
+    global exams
+    data = pd.read_excel(file_path, sheet_name=4, skiprows=1)
+    df = pd.DataFrame(data)
+    temp = df.values.tolist()
+    current_exam = ''
+    for row in temp:
+        if not isinstance(row[0], float):
+            current_exam = row[0]
+            exams[current_exam]['Exam Percentage'] = row[1]
+        related_outcomes = []
+        for i in range(4, len(row)):
+            if not isinstance(row[i], float):
+                related_outcomes.append(row[i])
+        exams[current_exam]['Questions'][row[2]] = {'Question Percentage': row[3], 'Related Outcomes': str(', '.join(related_outcomes))}
+
+
+def gat_grade_center_sheet(file_path):
+    global exams, grading_tool_grades
+    data = pd.read_excel(file_path, sheet_name=6)
+    df = pd.DataFrame(data)
+
+    col_count = 4
+    for i in exams.keys():
+        for j in exams[i]['Questions'].keys():
+            col_count += 1
+    for i in range(4, col_count):
+        grading_tool_grades.append(list())
+    df.drop(['Unnamed: 2', 'Unnamed: 3'], axis=1, inplace=True)
+    for i in range(col_count, df.shape[1]):
+        df.drop(df.columns[col_count], axis=1, inplace=True)
+    df.dropna(subset=[df.columns[0]], inplace=True)
+    temp = df.values.tolist()
+    for count in temp[0][4:]:
+        for i in exams.keys():
+            for j in exams[i]['Questions'].keys():
+                exams[i]['Questions'][j]['Count Question?'] = count
+    for i in temp[4:]:
+        for j in range(len(i[4:])):
+            grading_tool_grades[j].append(i[j+4])
+
+
+#spa_course_sheet('/Users/alpgokcek/PycharmProjects/rest-test/uploads/input.xlsx')
