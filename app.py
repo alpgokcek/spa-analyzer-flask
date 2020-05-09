@@ -3,6 +3,14 @@ import os
 from werkzeug.utils import secure_filename
 from helpers import analyze_spa, delete_excel, gat_analyzer
 import threading
+from multiprocessing.pool import ThreadPool
+import concurrent.futures
+from ThreadWithReturn import ThreadWithReturnValue
+import requests
+from dotenv import load_dotenv
+from os import environ
+
+load_dotenv()
 
 UPLOAD_FOLDER = os.path.abspath(os.getcwd()) + '/uploads'
 
@@ -38,7 +46,12 @@ def get_file_name(filename):
 
 @app.route('/file-upload', methods=['POST'])
 def upload_file():
-    file_path = ''
+    r = requests.get(environ.get('LARAVEL_URL')+'/api/check-auth', headers={'Authorization': str(request.headers.get('Authorization'))})
+    # file_path = ''
+    if r.status_code != 204:
+        resp = jsonify({'message': 'Auth failed.'})
+        resp.status_code = r.status_code
+        return resp
     if request.json:
         department, year_and_term, type, code, name, credit = request.json.department, request.json.year_and_term, request.type, request.code, request.name, request.credit
     elif request.form:
@@ -64,15 +77,23 @@ def upload_file():
 
         try:
             if type == 'spa':
-                thread = threading.Thread(target=analyze_spa,
-                                          kwargs={'file_path': file_path, 'department': department, 'code': code,
-                                                  'year_and_term': year_and_term, 'name': name, 'credit': credit})
+                thread1 = ThreadWithReturnValue(target=analyze_spa,
+                                                args=(file_path, department, code, year_and_term, name, credit))
+                thread1.start()
+                return_val = thread1.join()
+                print(return_val)
+
             else:
-                thread = threading.Thread(target=gat_analyzer,
-                                          kwargs={'file_path': file_path, 'department': department, 'code': code,
-                                                  'year_and_term': year_and_term, 'name': name, 'credit': credit})
-            thread.start()
-            thread.join()
+                thread1 = ThreadWithReturnValue(target=gat_analyzer,
+                                                args=(file_path, department, code, year_and_term, name, credit))
+                thread1.start()
+                return_val = thread1.join()
+                print(return_val)
+
+            if return_val is not True:
+                resp = jsonify({'error': 'An error occurred. New changes won\'t be applied', 'message': return_val})
+                resp.status_code = 500
+                delete_excel(department, code, year_and_term, name, credit)
             os.remove(file_path)
         except Exception as e:
             resp = jsonify({'error': 'An error occurred.', 'message': e})
@@ -100,7 +121,6 @@ def remove_file():
     except Exception as e:
         resp = jsonify({'error': 'An error occurred.', 'message': e})
         resp.status_code = 500
-
     return resp
 
 
