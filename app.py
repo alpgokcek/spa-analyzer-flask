@@ -44,8 +44,20 @@ def get_file_name(filename):
         return [str(splitted_file_name[0].lower()), str('.' + splitted_file_name[1].lower())]
 
 
+def check_auth():
+    r = requests.get(environ.get('LARAVEL_URL') + '/api/check-auth',
+                     headers={'Authorization': str(request.headers.get('Authorization'))})
+    # file_path = ''
+    if r.status_code != 204:
+        resp = jsonify({'message': 'Auth failed.'})
+        resp.status_code = r.status_code
+        return resp
+    return None
+
 @app.route('/file-upload', methods=['POST'])
 def upload_file():
+    auth_status = check_auth()
+    if auth_status is not None: return auth_status
     r = requests.get(environ.get('LARAVEL_URL')+'/api/check-auth', headers={'Authorization': str(request.headers.get('Authorization'))})
     # file_path = ''
     if r.status_code != 204:
@@ -81,14 +93,12 @@ def upload_file():
                                                 args=(file_path, department, code, year_and_term, name, credit))
                 thread1.start()
                 return_val = thread1.join()
-                print(return_val)
 
             else:
                 thread1 = ThreadWithReturnValue(target=gat_analyzer,
                                                 args=(file_path, department, code, year_and_term, name, credit))
                 thread1.start()
                 return_val = thread1.join()
-                print(return_val)
 
             if return_val is not True:
                 resp = jsonify({'error': 'An error occurred. New changes won\'t be applied', 'message': return_val})
@@ -108,6 +118,8 @@ def upload_file():
 
 @app.route('/file-remove', methods=['DELETE'])
 def remove_file():
+    auth_status = check_auth()
+    if auth_status is not None: return auth_status
     try:
         if request.json:
             department, code, year_and_term, name, credit = request.json.department, request.json.code, request.json.year_and_term, request.json.name, request.json.credit
