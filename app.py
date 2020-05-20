@@ -28,6 +28,11 @@ def index_page():
 
 ALLOWED_EXTENSIONS = {'xls', 'xlsx', 'xlsm'}
 
+@app.after_request
+def after_request(response):
+    header = response.headers
+    header['Access-Control-Allow-Origin'] = '*'
+    return response
 
 def allowed_file(filename):
     if '.' in filename:
