@@ -70,9 +70,9 @@ def upload_file():
         resp.status_code = r.status_code
         return resp
     if request.json:
-        department, year_and_term, type, code, name, credit = request.json.department, request.json.year_and_term, request.type, request.code, request.name, request.credit
+        section, department, year_and_term, type, code, name, credit = request.json.section, request.json.department, request.json.year_and_term, request.type, request.code, request.name, request.credit
     elif request.form:
-        department, year_and_term, type, code, name, credit = request.form['department'], request.form['year_and_term'], \
+        section, department, year_and_term, type, code, name, credit = request.form['section'], request.form['department'], request.form['year_and_term'], \
                                                               request.form['type'], request.form['code'], request.form[
                                                                   'name'], request.form['credit']
     else:
@@ -95,13 +95,13 @@ def upload_file():
         try:
             if type == 'spa':
                 thread1 = ThreadWithReturnValue(target=analyze_spa,
-                                                args=(file_path, department, code, year_and_term, name, credit))
+                                                args=(file_path, section, department, code, year_and_term, name, credit))
                 thread1.start()
                 return_val = thread1.join()
 
             else:
                 thread1 = ThreadWithReturnValue(target=gat_analyzer,
-                                                args=(file_path, department, code, year_and_term, name, credit))
+                                                args=(file_path, section, department, code, year_and_term, name, credit))
                 thread1.start()
                 return_val = thread1.join()
 
@@ -127,12 +127,12 @@ def remove_file():
     if auth_status is not None: return auth_status
     try:
         if request.json:
-            department, code, year_and_term, name, credit = request.json.department, request.json.code, request.json.year_and_term, request.json.name, request.json.credit
+            section, department, code, year_and_term, name, credit = request.json.section, request.json.department, request.json.code, request.json.year_and_term, request.json.name, request.json.credit
         else:
-            department, code, year_and_term, name, credit = request.form['department'], request.form['code'], \
+            section, department, code, year_and_term, name, credit = request.form['section'], request.form['department'], request.form['code'], \
                                                             request.form['year_and_term'], request.form['name'], \
                                                             request.form['credit']
-        delete_excel(department, code, year_and_term, name, credit)
+        delete_excel(section, department, code, year_and_term, name, credit)
         resp = jsonify({})
         resp.status_code = 205
     except Exception as e:

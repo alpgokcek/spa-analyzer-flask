@@ -63,7 +63,7 @@ def clear_global_variables():
         list)
 
 
-def delete_excel(department, code, year_and_term, name, credit):
+def delete_excel(section, department, code, year_and_term, name, credit):
     conn = engine.connect()
     assessments_to_delete, grading_tools_to_delete, course_outcomes_to_delete = [], [], []
     metadata = sqlalchemy.MetaData()
@@ -78,6 +78,8 @@ def delete_excel(department, code, year_and_term, name, credit):
                                           autoload_with=engine)
     student_get_grade_co_table = sqlalchemy.Table('student_gets_measured_grade_course_outcome', metadata, autoload=True,
                                           autoload_with=engine)
+    student_get_grade_po_table = sqlalchemy.Table('student_gets_measured_grade_program_outcome', metadata, autoload=True,
+                                                  autoload_with=engine)
 
     def po_provides_co():
         print("- Started: Deleting program_outcomes_provides_course_outcomes")
@@ -115,6 +117,14 @@ def delete_excel(department, code, year_and_term, name, credit):
         inner_conn.close()
         print("+ Done: Deleting student_gets_measured_grade_course_outcome")
 
+    def student_get_grade_po():
+        print("- Started: Deleting student_gets_measured_grade_program_outcome")
+        inner_conn = engine.connect()
+        delete_query = student_get_grade_po_table.delete().where(student_get_grade_po_table.c.course_id == course_id)
+        inner_conn.execute(delete_query)
+        inner_conn.close()
+        print("+ Done: Deleting student_gets_measured_grade_course_outcome")
+
     def delete_rest():
         print("- Started: Deleting rest")
         inner_conn = engine.connect()
@@ -135,6 +145,15 @@ def delete_excel(department, code, year_and_term, name, credit):
                         course_table.columns.year_and_term == year_and_term, course_table.columns.title == name,
                         course_table.columns.credit == credit))
     course_id = get_result_proxy(conn.execute(course_query))
+    ####
+
+    section_table = sqlalchemy.Table('section', metadata, autoload=True, autoload_with=engine)
+    section_query = section_table.update().values(is_file_uploaded=0).where(
+        section_table.columns.id == section)
+    conn.execute(section_query)
+
+
+
     print("- Started: Assessment ID fetch")
     # Assessments
     assessment_select_query = sqlalchemy.select([assessment_table]).where(
@@ -167,15 +186,15 @@ def delete_excel(department, code, year_and_term, name, credit):
     return True
 
 
-def analyze_spa(file_path, department, code, year_and_term, name, credit):
+def analyze_spa(file_path, section, department, code, year_and_term, name, credit):
     clear_global_variables()
     spa_program_sheet(file_path)
     spa_course_sheet(file_path)
     spa_grades_sheet(file_path)
-    return start_threads(department, code, year_and_term, name, credit)
+    return start_threads(section, department, code, year_and_term, name, credit)
 
 
-def start_threads(department, code, year_and_term, name, credit):
+def start_threads(section, department, code, year_and_term, name, credit):
     global course_id
     print("- Started:  Course")
     try:
@@ -188,11 +207,16 @@ def start_threads(department, code, year_and_term, name, credit):
                             course_table.columns.credit == credit))
         course_id = get_result_proxy(conn.execute(course_query))
 
+        print(course_id, section, department, code, year_and_term, name, credit)
         if course_id is None:
             print(course_id is None)
             return 'Course not found'
     except Exception as e:
         return e
+    section_table = sqlalchemy.Table('section', metadata, autoload=True, autoload_with=engine)
+    section_query = section_table.update().values(is_file_uploaded=1).where(
+        section_table.columns.id == section)
+    conn.execute(section_query)
     print("+ Done: Course")
 
     thread1 = ThreadWithReturnValue(target=program_outcomes_course_outcomes)
@@ -206,6 +230,7 @@ def start_threads(department, code, year_and_term, name, credit):
     conn1 = engine.raw_connection()
     curs = conn1.cursor()
     curs.callproc('calc_cos_for_course', [course_id])
+    curs.callproc('calc_pos', [course_id])
     curs.close()
     conn1.commit()
     conn1.close()
@@ -213,7 +238,6 @@ def start_threads(department, code, year_and_term, name, credit):
     conn.close()
     engine.dispose()
     return True
-
 
 ###################################################################################################
 ############################### COURSE OUTCOMES - PROGRAM OUTCOMES ################################
@@ -466,7 +490,7 @@ def spa_grades_sheet(file_path):
                                                     'Count Question?': col[5]}
 
 
-def gat_analyzer(file_path, department, code, year_and_term, name, credit):
+def gat_analyzer(file_path, section, department, code, year_and_term, name, credit):
     clear_global_variables()
     gat_conversion_sheet(file_path)
     gat_po_sheet(file_path)
@@ -474,7 +498,7 @@ def gat_analyzer(file_path, department, code, year_and_term, name, credit):
     gat_co_sheet(file_path)
     gat_evaluation_co_sheet(file_path)
     gat_grade_center_sheet(file_path)
-    return start_threads(department, code, year_and_term, name, credit)
+    return start_threads(section, department, code, year_and_term, name, credit)
 
 def gat_conversion_sheet(file_path):
     global conversion_dict
