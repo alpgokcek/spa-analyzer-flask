@@ -392,7 +392,6 @@ def student_answers_grading_tool():
             for i in range(last_pos, len(exams[exam]['Questions'])+last_pos):
                 for j in range(len(grading_tool_grades[i])):
                     now = datetime.datetime.utcnow()
-                    # print(student_list)
                     sagt = sagt.append(pd.DataFrame(
                         {'student_id': student_list[j],
                          'grading_tool_id': grading_tool_id[exam][grading_tool_pos],
@@ -448,13 +447,21 @@ def spa_grades_sheet(file_path):
         global student_list, course_section
         # student id's
         temp_student_list = data.iloc[0:, 0].ravel().tolist()
+        temp_student_letter = data.iloc[0:, 4].ravel().tolist()
+        temp_student_grade = data.iloc[0:, 2].ravel().tolist()
+
+        print(temp_student_list)
+        print(temp_student_letter)
+        print(temp_student_grade)
         conn = engine.connect()
         print("- Started: checking student list")
         metadata = sqlalchemy.MetaData()
         students_takes_sections_table = sqlalchemy.Table('students_takes_sections', metadata, autoload=True,
                                                          autoload_with=engine)
-        missing_students = []
-        for i in temp_student_list:
+        missing_students,missing_grades, missing_letters = [], [], []
+
+
+        for idx,i in enumerate(temp_student_list):
             students_takes_sections_query = sqlalchemy.select([students_takes_sections_table]).where(
                 sqlalchemy.and_(students_takes_sections_table.columns.student_id == i,
                                 students_takes_sections_table.columns.section_id == course_section))
@@ -463,23 +470,23 @@ def spa_grades_sheet(file_path):
                 student_list.append(i)
             else:
                 missing_students.append(i)
+                missing_letters.append(temp_student_letter[idx])
+                missing_grades.append(temp_student_grade[idx])
 
 
-        for i in missing_students:
-            print(i)
+        for idx,i in enumerate(missing_students):
+            # print(i)
             now = datetime.datetime.utcnow()
-            '''
             sts = pd.DataFrame(
-                {'course_id': course_id, 'explanation': course_outcomes['Course Outcome Explanation'][i], 'code': i,
-                 'created_at': now, 'updated_at': now},
+                {'student_id': i, 'section_id': course_section,'letter_grade':missing_letters[idx],'average':missing_grades[idx], 'created_at': now, 'updated_at': now},
                 index=[0])
 
-            sts.to_sql('student_takes_sections', con=conn, if_exists='append', chunksize=1000, index=False)
+            print(sts.average, sts.letter_grade)
+            sts.to_sql('students_takes_sections', con=conn, if_exists='append', chunksize=1000, index=False)
+            # last_id = conn.execute("SELECT LAST_INSERT_ID();")
+            # student_list[i] = get_result_proxy(last_id)
+            student_list.append(i)
 
-            last_id = conn.execute("SELECT LAST_INSERT_ID();")
-
-            student_list[i] = get_result_proxy(last_id)
-            '''
 
 
 
