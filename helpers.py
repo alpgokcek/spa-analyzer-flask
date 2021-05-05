@@ -39,9 +39,10 @@ def nested_defaultdict():
 
 program_outcomes, course_outcomes, student_list, exams, grading_tool_grades = dict(), dict(), list(), defaultdict(
     nested_defaultdict), list()
-course_code, course_name, course_credit = '', '', '',
+course_code, course_name, course_credit, course_year_and_term, course_department, course_section = '', '', '', '', '', ''
 program_outcomes_id, course_outcomes_id, course_id, student_id, exam_id, grading_tool_id = dict(), dict(), 0, dict(), dict(), defaultdict(
     list)
+
 
 DB_USER, DB_PASS, DB_HOST, DB_PORT, DATABASE = environ.get('DB_USER'), environ.get('DB_PASS'), environ.get(
     'DB_HOST'), environ.get('DB_PORT'), environ.get('DATABASE')
@@ -186,12 +187,7 @@ def delete_excel(section, department, code, year_and_term, name, credit):
     return True
 
 
-def analyze_spa(file_path, section, department, code, year_and_term, name, credit):
-    clear_global_variables()
-    spa_program_sheet(file_path)
-    spa_course_sheet(file_path)
-    spa_grades_sheet(file_path)
-    return start_threads(section, department, code, year_and_term, name, credit)
+
 
 
 def start_threads(section, department, code, year_and_term, name, credit):
@@ -227,13 +223,13 @@ def start_threads(section, department, code, year_and_term, name, credit):
     thread2.start()
     print("program_outcomes_course_outcomes", thread2.join())
 
-    conn1 = engine.raw_connection()
-    curs = conn1.cursor()
-    curs.callproc('calc_cos_for_course', [course_id])
-    curs.callproc('calc_pos', [course_id])
-    curs.close()
-    conn1.commit()
-    conn1.close()
+    # conn1 = engine.raw_connection()
+    # curs = conn1.cursor()
+    # curs.callproc('calc_cos_for_course', [course_id])
+    # curs.callproc('calc_pos', [course_id])
+    # curs.close()
+    # conn1.commit()
+    # conn1.close()
 
     conn.close()
     engine.dispose()
@@ -248,31 +244,27 @@ def program_outcomes_course_outcomes():
     metadata = sqlalchemy.MetaData()
     program_outcome_table = sqlalchemy.Table('program_outcome', metadata, autoload=True, autoload_with=engine)
     program_outcome_select_query = sqlalchemy.select([program_outcome_table]).where(
-        program_outcome_table.columns.year_and_term == '2019-2020-01')
-    program_outcomes_id = get_result_proxy_list(conn.execute(program_outcome_select_query), 'code')
+        sqlalchemy.and_(program_outcome_table.columns.year_and_term == course_year_and_term,
+                        program_outcome_table.columns.department_id == course_department))
 
+    program_outcomes_id = get_result_proxy_list(conn.execute(program_outcome_select_query), 'code')
     print('- Started: program outcomes course outcomes')
     try:
-        for i in program_outcomes.keys():
-            if i not in program_outcomes_id:
-                now = datetime.datetime.utcnow()
-                program_outcome = pd.DataFrame(
-                    {'department_id': 1, 'explanation': program_outcomes[i], 'code': i, 'created_at': now,
-                     'updated_at': now, 'year_and_term': '2019-2020-01'},
-                    index=[0])
-                program_outcome.to_sql('program_outcome', con=conn, if_exists='append', chunksize=1000, index=False)
-                last_id = conn.execute("SELECT LAST_INSERT_ID();")
-                program_outcomes_id[i] = get_result_proxy(last_id)
-
         for i in course_outcomes['Course Outcome Explanation'].keys():
             now = datetime.datetime.utcnow()
+
             course_outcome = pd.DataFrame(
                 {'course_id': course_id, 'explanation': course_outcomes['Course Outcome Explanation'][i], 'code': i,
                  'created_at': now, 'updated_at': now},
                 index=[0])
+
+
             course_outcome.to_sql('course_outcome', con=conn, if_exists='append', chunksize=1000, index=False)
+
             last_id = conn.execute("SELECT LAST_INSERT_ID();")
+
             course_outcomes_id[i] = get_result_proxy(last_id)
+
     except Exception as e:
         return e
     conn.close()
@@ -400,20 +392,34 @@ def student_answers_grading_tool():
             for i in range(last_pos, len(exams[exam]['Questions'])+last_pos):
                 for j in range(len(grading_tool_grades[i])):
                     now = datetime.datetime.utcnow()
+                    # print(student_list)
                     sagt = sagt.append(pd.DataFrame(
-                        {'student_id': student_list[j], 'grading_tool_id': grading_tool_id[exam][grading_tool_pos],
+                        {'student_id': student_list[j],
+                         'grading_tool_id': grading_tool_id[exam][grading_tool_pos],
                          'grade': grading_tool_grades[i][j],
                          'created_at': now,
                          'updated_at': now},
                         index=[0]))
                 grading_tool_pos = grading_tool_pos + 1
                 last_pos = last_pos + 1
+        # print("a")
         sagt.to_sql('student_answers_grading_tool', con=conn, if_exists='append', chunksize=1000, index=False)
+        # print("b")
     except Exception as e:
         return e
     conn.close()
     print('+ Done: student answers grading tool')
     return True
+
+
+def analyze_spa(file_path, section, department, code, year_and_term, name, credit):
+    global course_code, course_name, course_credit, course_year_and_term, course_department, course_section
+    course_code, course_name, course_credit, course_year_and_term, course_department, course_section = code, name, credit, year_and_term, department, section
+    clear_global_variables()
+    spa_program_sheet(file_path)
+    spa_course_sheet(file_path)
+    spa_grades_sheet(file_path)
+    return start_threads(section, department, code, year_and_term, name, credit)
 
 
 def spa_program_sheet(file_path):
@@ -439,7 +445,7 @@ def spa_grades_sheet(file_path):
     df = pd.DataFrame(data)
 
     def students():
-        global student_list
+        global student_list, course_section
         # student id's
         temp_student_list = data.iloc[0:, 0].ravel().tolist()
         conn = engine.connect()
@@ -447,13 +453,36 @@ def spa_grades_sheet(file_path):
         metadata = sqlalchemy.MetaData()
         students_takes_sections_table = sqlalchemy.Table('students_takes_sections', metadata, autoload=True,
                                                          autoload_with=engine)
+        missing_students = []
         for i in temp_student_list:
             students_takes_sections_query = sqlalchemy.select([students_takes_sections_table]).where(
                 sqlalchemy.and_(students_takes_sections_table.columns.student_id == i,
-                                students_takes_sections_table.columns.section_id == 1))
+                                students_takes_sections_table.columns.section_id == course_section))
             students_takes_sections = get_result_proxy(conn.execute(students_takes_sections_query))
             if students_takes_sections:
                 student_list.append(i)
+            else:
+                missing_students.append(i)
+
+
+        for i in missing_students:
+            print(i)
+            now = datetime.datetime.utcnow()
+            '''
+            sts = pd.DataFrame(
+                {'course_id': course_id, 'explanation': course_outcomes['Course Outcome Explanation'][i], 'code': i,
+                 'created_at': now, 'updated_at': now},
+                index=[0])
+
+            sts.to_sql('student_takes_sections', con=conn, if_exists='append', chunksize=1000, index=False)
+
+            last_id = conn.execute("SELECT LAST_INSERT_ID();")
+
+            student_list[i] = get_result_proxy(last_id)
+            '''
+
+
+
         conn.close()
         print('+ Done: checking student list')
 
@@ -486,7 +515,8 @@ def spa_grades_sheet(file_path):
         if not isinstance(col[0], float):
             current_exam = col[0]
             exams[current_exam]['Exam Percentage'] = col[1]
-        exams[current_exam]['Questions'][col[2]] = {'Question Percentage': col[3], 'Related Outcomes': col[4],
+        exams[current_exam]['Questions'][col[2]] = {'Question Percentage': col[3],
+                                                    'Related Outcomes': col[4],
                                                     'Count Question?': col[5]}
 
 
@@ -574,6 +604,25 @@ def gat_grade_center_sheet(file_path):
     for i in temp[4:]:
         for j in range(len(i[4:])):
             grading_tool_grades[j].append(i[j + 4])
+
+
+file_path = "D://GitHub//SPA//spa-analyzer-flask//uploads//input.xlsx"
+section = 7
+department = 1
+code = "MUH1396"
+year_and_term= "2019-2020-01"
+name = "Muhammed Test"
+credit = 6
+
+
+analyze_spa(file_path, section, department, code, year_and_term, name, credit)
+
+
+
+
+
+
+
 '''
 spa_course_sheet('/Users/alpgokcek/deneme/input.xlsx')
 spa_program_sheet('/Users/alpgokcek/deneme/input.xlsx')
